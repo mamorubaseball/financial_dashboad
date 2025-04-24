@@ -1,37 +1,38 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
-
-import { ChartContainer, ChartTooltipContent } from "./ui/chart"
-
-const data = [
-  {
-    month: "2024-11",
-    資産額: 4200000,
-  },
-  {
-    month: "2024-12",
-    資産額: 4350000,
-  },
-  {
-    month: "2025-01",
-    資産額: 4500000,
-  },
-  {
-    month: "2025-02",
-    資産額: 4750000,
-  },
-  {
-    month: "2025-03",
-    資産額: 5276113,
-  },
-  {
-    month: "2025-04",
-    資産額: 4953854,
-  },
-]
+import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart"
+import { fetchMonthlyAssets } from "@/lib/sheets"
+import { useMonth } from "@/contexts/month-context"
 
 export function Overview() {
+  const [data, setData] = useState([])
+  const [isLoading, setIsLoading] = useState(true)
+  const { currentMonth } = useMonth()
+
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const assetsData = await fetchMonthlyAssets()
+        setData(assetsData)
+      } catch (error) {
+        console.error("Failed to load monthly assets data:", error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    loadData()
+  }, [])
+
+  if (isLoading) {
+    return <div className="h-[300px] flex items-center justify-center">Loading...</div>
+  }
+
+  // 現在の月までのデータのみを表示
+  const filteredData = data.filter((item) => item.month <= currentMonth)
+
   return (
     <ChartContainer
       config={{
@@ -44,7 +45,7 @@ export function Overview() {
     >
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart
-          data={data}
+          data={filteredData}
           margin={{
             top: 5,
             right: 10,
@@ -63,8 +64,8 @@ export function Overview() {
             tickLine={false}
             axisLine={false}
             tickFormatter={(value) => {
-              const date = new Date(value)
-              return `${date.getFullYear().toString().slice(2)}/${(date.getMonth() + 1).toString().padStart(2, "0")}`
+              const [year, month] = value.split("/")
+              return `${year.slice(2)}/${month}`
             }}
             tickMargin={10}
           />

@@ -1,34 +1,111 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis } from "recharts"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from "./ui/chart"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { fetchIncomes, fetchExpenses } from "@/lib/sheets"
+import { useMonth } from "@/contexts/month-context"
+import { Skeleton } from "@/components/ui/skeleton"
 
-const incomeData = [
-  { name: "会社収入", value: 902389 },
-  { name: "投資運用益", value: -322259 },
-  { name: "副業", value: 16668 },
-]
+interface IncomeExpensesProps {
+  month?: string
+}
 
-const expenseData = [
-  { name: "家賃", value: 85456 },
-  { name: "ジム費", value: 10680 },
-  { name: "奨学金", value: 11325 },
-  { name: "通信費", value: 3280 },
-  { name: "光熱費", value: 12000 },
-  { name: "サブスク", value: 1690 },
-  { name: "食費+その他", value: 59852 },
-]
+export function IncomeExpenses({ month }: IncomeExpensesProps) {
+  const { currentMonth } = useMonth()
+  const selectedMonth = month || currentMonth
 
-export function IncomeExpenses() {
+  const [incomeData, setIncomeData] = useState([])
+  const [expenseData, setExpenseData] = useState([])
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    async function loadData() {
+      setIsLoading(true)
+      try {
+        const [incomesData, expensesData] = await Promise.all([
+          fetchIncomes(selectedMonth),
+          fetchExpenses(selectedMonth),
+        ])
+        setIncomeData(incomesData)
+        setExpenseData(expensesData)
+      } catch (error) {
+        console.error("Failed to load income/expense data:", error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    if (selectedMonth) {
+      loadData()
+    }
+  }, [selectedMonth])
+
+  // 月表示のフォーマット
+  const formatMonthDisplay = (monthStr: string) => {
+    if (!monthStr) return ""
+    const [year, month] = monthStr.split("/")
+    return `${year}年${Number.parseInt(month)}月`
+  }
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <Card className="border-none shadow-md">
+          <CardHeader className="flex flex-row items-center">
+            <div>
+              <CardTitle>収入内訳</CardTitle>
+              <Skeleton className="h-4 w-24 mt-1" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid md:grid-cols-2 gap-6">
+              <Skeleton className="h-[300px]" />
+              <div className="flex flex-col justify-center">
+                <Skeleton className="h-[200px]" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-none shadow-md">
+          <CardHeader className="flex flex-row items-center">
+            <div>
+              <CardTitle>支出内訳</CardTitle>
+              <Skeleton className="h-4 w-24 mt-1" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid md:grid-cols-2 gap-6">
+              <Skeleton className="h-[300px]" />
+              <div className="flex flex-col justify-center">
+                <Skeleton className="h-[200px]" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  // 収入合計を計算
+  const incomeTotal = incomeData.reduce((sum, item) => sum + item.value, 0)
+  // 実現収支（投資運用益を除く）を計算
+  const realizedIncome = incomeData
+    .filter((item) => item.name !== "投資運用益")
+    .reduce((sum, item) => sum + item.value, 0)
+  // 支出合計を計算
+  const expenseTotal = expenseData.reduce((sum, item) => sum + item.value, 0)
+
   return (
     <div className="space-y-6">
       <Card className="border-none shadow-md">
         <CardHeader className="flex flex-row items-center">
           <div>
             <CardTitle>収入内訳</CardTitle>
-            <CardDescription>2025年4月</CardDescription>
+            <CardDescription>{formatMonthDisplay(selectedMonth)}</CardDescription>
           </div>
           <div className="ml-auto w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
             <svg
@@ -96,28 +173,25 @@ export function IncomeExpenses() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  <TableRow>
-                    <TableCell>会社収入（ボーナス含む）</TableCell>
-                    <TableCell className="text-right font-medium">902,389</TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell>投資運用益（前月比評価損益）</TableCell>
-                    <TableCell className="text-right font-medium text-rose-500">-322,259</TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell>副業</TableCell>
-                    <TableCell className="text-right font-medium">16,668</TableCell>
-                  </TableRow>
+                  {incomeData.map((item, index) => (
+                    <TableRow key={index}>
+                      <TableCell>{item.name}</TableCell>
+                      <TableCell className={`text-right font-medium ${item.value < 0 ? "text-rose-500" : ""}`}>
+                        {item.value.toLocaleString()}
+                      </TableCell>
+                    </TableRow>
+                  ))}
                   <TableRow className="border-t-2">
                     <TableCell className="font-bold">収入合計</TableCell>
-                    <TableCell className="text-right font-bold">596,798</TableCell>
+                    <TableCell className="text-right font-bold">{incomeTotal.toLocaleString()}</TableCell>
                   </TableRow>
                 </TableBody>
               </Table>
 
               <div className="mt-4 text-sm text-zinc-500 dark:text-zinc-400">
                 <p>
-                  投資運用益を除いた実現収支: <span className="text-emerald-500 font-medium">+¥734,774</span>
+                  投資運用益を除いた実現収支:{" "}
+                  <span className="text-emerald-500 font-medium">+¥{realizedIncome.toLocaleString()}</span>
                 </p>
               </div>
             </div>
@@ -129,7 +203,7 @@ export function IncomeExpenses() {
         <CardHeader className="flex flex-row items-center">
           <div>
             <CardTitle>支出内訳</CardTitle>
-            <CardDescription>2025年4月</CardDescription>
+            <CardDescription>{formatMonthDisplay(selectedMonth)}</CardDescription>
           </div>
           <div className="ml-auto w-8 h-8 rounded-full bg-rose-100 flex items-center justify-center">
             <svg
@@ -188,37 +262,15 @@ export function IncomeExpenses() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  <TableRow>
-                    <TableCell>家賃</TableCell>
-                    <TableCell className="text-right font-medium">85,456</TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell>ジム費</TableCell>
-                    <TableCell className="text-right font-medium">10,680</TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell>奨学金</TableCell>
-                    <TableCell className="text-right font-medium">11,325</TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell>通信費</TableCell>
-                    <TableCell className="text-right font-medium">3,280</TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell>光熱費</TableCell>
-                    <TableCell className="text-right font-medium">12,000</TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell>サブスク</TableCell>
-                    <TableCell className="text-right font-medium">1,690</TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell>食費+その他</TableCell>
-                    <TableCell className="text-right font-medium">59,852</TableCell>
-                  </TableRow>
+                  {expenseData.map((item, index) => (
+                    <TableRow key={index}>
+                      <TableCell>{item.name}</TableCell>
+                      <TableCell className="text-right font-medium">{item.value.toLocaleString()}</TableCell>
+                    </TableRow>
+                  ))}
                   <TableRow className="border-t-2">
                     <TableCell className="font-bold">支出合計</TableCell>
-                    <TableCell className="text-right font-bold">184,283</TableCell>
+                    <TableCell className="text-right font-bold">{expenseTotal.toLocaleString()}</TableCell>
                   </TableRow>
                 </TableBody>
               </Table>
